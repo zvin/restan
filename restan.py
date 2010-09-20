@@ -30,6 +30,8 @@ class Tag(object):
         if self.self_closing:
             msg = "Tag %s is self closing and can't have childs" % self.name
             raise TypeError, msg
+        if not isinstance(args, tuple):
+            args = (args,)
         self.childs = args
         return self
     def __call__(self, **kwargs):

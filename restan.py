@@ -75,7 +75,7 @@ class JsCall(object):
 def __flatten_and_escape(param):
     """Used to escape JsCall and JsIndex parameters, do not use anywhere else"""
     result = flatten(param)
-    if not isinstance(param, JsNode):
+    if not isinstance(param, (JsNode, int, float)):
         result = "'%s'" % (result.replace("\\", "\\\\").replace("'", "\\'"))
     return result
 

@@ -1,13 +1,16 @@
+from types import InstanceType
 from itertools import imap
+from cgi import escape
 
 __flattener_registry = dict()
 
 def register_flattener(_class, flattener):
+    if _class == InstanceType:
+        raise TypeError, "Flatteners are not allowed for old style classes"
     __flattener_registry[_class] = flattener
 
 def flatten(element):
-    _class = object.__getattribute__(element, "__class__")
-    flattener = __flattener_registry[_class]
+    flattener = __flattener_registry[type(element)]
     return flattener(element)
 
 class Tags(object):
@@ -30,7 +33,7 @@ class Tag(object):
         if self.self_closing:
             msg = "Tag %s is self closing and can't have childs" % self.name
             raise TypeError, msg
-        if not isinstance(args, tuple):
+        if type(args) != tuple:
             args = (args,)
         self.childs = args
         return self
@@ -52,7 +55,13 @@ def flatten_tag(tag):
     if tag.self_closing:
         return "<%s%s/>" % (tag.name, attributes)
     else:
-        childs_flat = "".join(imap(flatten, tag.childs))
+        def flatten_child(child):
+            if type(child) in (str, unicode):
+                # escape htmlchars only in strings
+                return escape(child)
+            else:
+                return flatten(child)
+        childs_flat = "".join(imap(flatten_child, tag.childs))
         return "<%s%s>%s</%s>" % (tag.name, attributes, childs_flat, tag.name)
 
 register_flattener(Tag, flatten_tag)
@@ -75,7 +84,7 @@ class JsCall(object):
 def __flatten_and_escape(param):
     """Used to escape JsCall and JsIndex parameters, do not use anywhere else"""
     result = flatten(param)
-    if not isinstance(param, (JsNode, int, float)):
+    if type(param) not in (JsNode, int, float):
         result = "'%s'" % (result.replace("\\", "\\\\").replace("'", "\\'"))
     return result
 
@@ -122,63 +131,5 @@ register_flattener(unicode, unicode)
 
 js = Js()
 
-T = tags
-
-def unittest(function, _input, output):
-    value = function(_input)
-    if value == output:
-        print "[OK]"
-    else:
-        print "[ERROR]"
-        print "f(input):        ", value
-        print "expected output: ", output
-    print "-" * 80
-
-flatten_tests = (
-  (flatten,
-   T.div["plop", T.span(style="border: 1px solid red;")["plip"]],
-   '<div>plop<span style="border: 1px solid red;">plip</span></div>'
-  ),
-  (flatten,
-   T.div["plop", T.br, T.span["plip"]],
-   '<div>plop<br/><span>plip</span></div>'
-  ),
-  (flatten,
-   T.div(_id="lol")["plop", T.br, T.span["plip"]],
-   '<div id="lol">plop<br/><span>plip</span></div>'
-  ),
-  (flatten,
-   T.div(onclick=js.alert("l'apostrophe"))["plop", T.br],
-   "<div onclick=\"alert('l\\'apostrophe')\">plop<br/></div>"
-  ),
-  (flatten,
-   T.div(onclick=js.alert('"'))["plop"],
-   """<div onclick="alert('&quot;')">plop</div>"""
-  ),
-  (flatten,
-   T.div(onclick=js.document.write("l'apostrophe"))["plop"],
-   "<div onclick=\"document.write('l\\'apostrophe')\">plop</div>"
-  ),
-  (flatten,
-   T.div(onclick=js.foo["bar"]("baz").write("l'apostrophe"))["plop", T.br],
-   "<div onclick=\"foo['bar']('baz').write('l\\'apostrophe')\">plop<br/></div>"
-  ),
-  (flatten,
-   T.div(onclick=js.foo[js.document.getElementById("plop")].write("l'apostrophe"))["plop"],
-   """<div onclick="foo[document.getElementById('plop')].write('l\\'apostrophe')\">plop</div>"""
-  ),
-  (flatten,
-   js.document.write( T.p(onclick=js.alert("l'apostrophe"))["plop"] ),
-   """document.write('<p onclick="alert(\\'l\\\\\\'apostrophe\\')">plop</p>')"""
-  ),
-  (flatten,
-   js.document.write( T.p(onclick=js.document.write('''"l'apostrophe"'''))["plop"] ),
-   """document.write('<p onclick="document.write(\\'&quot;l\\\\\\'apostrophe&quot;\\')">plop</p>')"""
-  ),
-)
-
-if __name__ == "__main__":
-    for i in xrange(len(flatten_tests)):
-        print "test", i,
-        unittest(*flatten_tests[i])
+__all__ = ["tags", "js", "flatten"]
 

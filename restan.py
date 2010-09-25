@@ -6,11 +6,15 @@ __flattener_registry = dict()
 
 def register_flattener(_class, flattener):
     if _class == InstanceType:
-        raise TypeError, "Flatteners are not allowed for old style classes"
+        msg = "Flatteners are not allowed for old style classes"
+        raise NotImplementedError, msg
     __flattener_registry[_class] = flattener
 
 def flatten(element):
-    flattener = __flattener_registry[type(element)]
+    try:
+        flattener = __flattener_registry[type(element)]
+    except KeyError:
+        raise KeyError, "No flattener registered for %s" % type(element)
     return flattener(element)
 
 class Tags(object):
@@ -18,55 +22,75 @@ class Tags(object):
                     "input", "img", "link", "meta", "param"
                    )
     def __getattribute__(self, name):
-        self_closing = name in object.__getattribute__(self, "self_closing")
-        return Tag(name, self_closing = self_closing)
+        if name in object.__getattribute__(self, "self_closing"):
+            return SelfClosingTag(name)
+        else:
+            return Tag(name)
 
 tags = Tags()
 
 class Tag(object):
-    def __init__(self, name, self_closing=False):
+    def __init__(self, name):
         self.name = name
-        self.self_closing = self_closing
         self.childs = ()
-        self.attributes = {}
+        self.attributes = ()
     def __getitem__(self, args):
-        if self.self_closing:
-            msg = "Tag %s is self closing and can't have childs" % self.name
-            raise TypeError, msg
         if type(args) != tuple:
             args = (args,)
         self.childs = args
         return self
     def __call__(self, **kwargs):
-        self.attributes = kwargs
+        self.attributes = map(lambda kv: TagAttribute(*kv), kwargs.items())
         return self
 
 def flatten_tag(tag):
-    def flatten_attribute(name, value):
-        if name.startswith("_"):
-            name = name[1:]
-        value = flatten(value)
-        return '%s="%s"' % (name, value.replace('"', '&quot;'))
-    attributes = " ".join(imap(lambda c: flatten_attribute(*c),
-                               tag.attributes.iteritems()
-                              )
-                         )
+    attributes = " ".join(imap(flatten, tag.attributes))
     if attributes: attributes = " " + attributes
-    if tag.self_closing:
-        return "<%s%s/>" % (tag.name, attributes)
-    else:
-        def flatten_child(child):
-            if type(child) in (str, unicode):
-                # escape htmlchars only in strings
-                return escape(child)
-            else:
-                return flatten(child)
-        childs_flat = "".join(imap(flatten_child, tag.childs))
-        return "<%s%s>%s</%s>" % (tag.name, attributes, childs_flat, tag.name)
+    def flatten_child(child):
+        if type(child) in (str, unicode):
+            # escape htmlchars only in strings
+            return escape(child)
+        else:
+            return flatten(child)
+    childs_flat = "".join(imap(flatten_child, tag.childs))
+    return "<%s%s>%s</%s>" % (tag.name, attributes, childs_flat, tag.name)
 
 register_flattener(Tag, flatten_tag)
+
+class SelfClosingTag(Tag):
+    def __getitem__(self, args):
+        msg = "Tag %s is self closing and can't have childs" % self.name
+        raise TypeError, msg
+
+def flatten_selfclosingtag(tag):
+    attributes = " ".join(imap(flatten, tag.attributes))
+    if attributes: attributes = " " + attributes
+    return "<%s%s/>" % (tag.name, attributes)
+
+register_flattener(SelfClosingTag, flatten_selfclosingtag)
+
+class TagAttribute(object):
+    def __init__(self, name, value):
+        if name.startswith("_"):
+            name = name[1:]
+        self.name = name
+        self.value = value
+
+def flatten_tagattribute(attribute):
+    value = flatten(attribute.value)
+    return '%s="%s"' % (attribute.name, escape(value, quote=True))
+
+register_flattener(TagAttribute, flatten_tagattribute)
+
 register_flattener(int, str)
 register_flattener(float, str)
+register_flattener(long, str)
+register_flattener(bool, lambda b: "1" if b else "0")
+
+def flatten_list(l):
+    return "".join(map(flatten, l))
+
+register_flattener(list, flatten_list)
 
 class JsAttribute(object):
     def __init__(self, name):

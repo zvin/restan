@@ -1,7 +1,7 @@
 import unittest
 from restan import tags as T, js, flatten
 
-class FlattenTagTestCase1(unittest.TestCase):
+class FlattenTestCase1(unittest.TestCase):
     def runTest(self):
         self.assertEqual(
           flatten(T.div["foo bar"]),
@@ -91,6 +91,46 @@ class FlattenTestCase13(unittest.TestCase):
           flatten(T.p["-->foo<--"]),
           "<p>--&gt;foo&lt;--</p>"
         )
+
+class FlattenTestCase14(unittest.TestCase):
+    def runTest(self):
+        p = T.p["A string; ",
+                u"A unicode string; ",
+                5, " (An integer) ",
+                1.0, " (A float) ",
+                1L, " (A long) ",
+                True, " (A bool) ",
+                ["A ", "List; "],
+               ]
+        self.assertEquals(flatten(p), "<p>A string; A unicode string; 5 (An integer) 1.0 (A float) 1 (A long) 1 (A bool) A List; </p>")
+
+class FlattenTestCase15(unittest.TestCase):
+    def runTest(self):
+        p = T.p(foo="<>&\"'")["<>&\"'"]
+        self.assertEquals(flatten(p), '<p foo="&lt;&gt;&amp;&quot;\'">&lt;&gt;&amp;"\'</p>')
+
+class FlattenTestCase16(unittest.TestCase):
+    def runTest(self):
+        self.assertEqual(
+          flatten(T.p(onclick=js.document.write(T.div(onclick=js.alert('"'))["plop"]))["lol"]),
+          '<p onclick="document.write(\'&lt;div onclick=&quot;alert(\\\'&amp;quot;\\\')&quot;&gt;plop&lt;/div&gt;\')">lol</p>'
+        )
+# TODO
+#class FlattenTestCase17(unittest.TestCase):
+#    def runTest(self):
+#        self.assertRaises(
+#            T.p["one"]["two"],
+#            Exception
+#        )
+
+#class FlattenTestCase18(unittest.TestCase):
+#    def runTest(self):
+#        p = T.p
+#        print flatten(p[p])
+#        self.assertRaises(
+#            p[p],
+#            Exception
+#        )
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,6 +7,9 @@ tree = T.p(
 )["lol"]
 
 flatten(tree)
-```
+
 
 >>>'<p onclick="document.write(\'&lt;div onclick=&quot;alert(\\\'&amp;quot;\\\')&quot;&gt;plop&lt;/div&gt;\')">lol</p>'
+```
+
+
